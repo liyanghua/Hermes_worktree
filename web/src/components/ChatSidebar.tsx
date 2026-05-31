@@ -29,11 +29,12 @@ import { Card } from "@nous-research/ui/ui/components/card";
 
 import { ModelPickerDialog } from "@/components/ModelPickerDialog";
 import { ToolCall, type ToolEntry } from "@/components/ToolCall";
+import { HtmlArtifactPreview } from "@/components/HtmlArtifactPreview";
 import { GatewayClient, type ConnectionState } from "@/lib/gatewayClient";
-import { HERMES_BASE_PATH, buildWsAuthParam } from "@/lib/api";
+import { HERMES_BASE_PATH, api, buildWsAuthParam, type HtmlArtifactInfo } from "@/lib/api";
 
 import { cn } from "@/lib/utils";
-import { AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronDown, FileCode2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface SessionInfo {
@@ -87,6 +88,9 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [info, setInfo] = useState<SessionInfo>({});
   const [tools, setTools] = useState<ToolEntry[]>([]);
+  const [artifacts, setArtifacts] = useState<HtmlArtifactInfo[]>([]);
+  const [artifactPath, setArtifactPath] = useState("");
+  const [artifactBusy, setArtifactBusy] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -272,6 +276,17 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
               : t,
           ),
         );
+      } else if (type === "artifact.html") {
+        const p = payload as { path?: string } | undefined;
+        if (!p?.path) {
+          return;
+        }
+        api
+          .resolveHtmlArtifact(p.path)
+          .then((artifact) => {
+            setArtifacts((prev) => [artifact, ...prev.filter((a) => a.path !== artifact.path)].slice(0, 8));
+          })
+          .catch((e) => setError(e instanceof Error ? e.message : String(e)));
       }
       });
     })();
@@ -285,8 +300,25 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
   const reconnect = useCallback(() => {
     setError(null);
     setTools([]);
+    setArtifacts([]);
     setVersion((v) => v + 1);
   }, []);
+
+  const addArtifact = useCallback(async () => {
+    const path = artifactPath.trim();
+    if (!path) return;
+    setArtifactBusy(true);
+    setError(null);
+    try {
+      const artifact = await api.resolveHtmlArtifact(path);
+      setArtifacts((prev) => [artifact, ...prev.filter((a) => a.path !== artifact.path)].slice(0, 8));
+      setArtifactPath("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setArtifactBusy(false);
+    }
+  }, [artifactPath]);
 
   // Picker hands us a fully-formed slash command (e.g. "/model anthropic/...").
   // Fire-and-forget through `slash.exec`; the TUI pane will render the result
@@ -377,6 +409,48 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
             </div>
           ) : (
             tools.map((t) => <ToolCall key={t.id} tool={t} />)
+          )}
+        </div>
+      </Card>
+
+      <Card className="flex min-h-0 flex-none flex-col px-2 py-2">
+        <div className="flex items-center justify-between gap-2 px-1 pb-2">
+          <div className="text-display text-xs tracking-wider text-text-tertiary">
+            artifacts
+          </div>
+          <FileCode2 className="h-3.5 w-3.5 text-text-tertiary" />
+        </div>
+
+        <div className="flex min-h-0 flex-col gap-2">
+          <div className="flex gap-1.5">
+            <input
+              value={artifactPath}
+              onChange={(e) => setArtifactPath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void addArtifact();
+              }}
+              placeholder="/path/to/report.html"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-ring"
+            />
+            <Button size="sm" outlined disabled={artifactBusy || !artifactPath.trim()} onClick={() => void addArtifact()}>
+              {artifactBusy ? "…" : "添加"}
+            </Button>
+          </div>
+
+          {artifacts.length === 0 ? (
+            <div className="px-2 py-4 text-center text-xs text-text-secondary">
+              no html artifacts yet
+            </div>
+          ) : (
+            artifacts.map((artifact) => (
+              <HtmlArtifactPreview
+                key={artifact.id}
+                artifact={artifact}
+                onRemove={() =>
+                  setArtifacts((prev) => prev.filter((item) => item.id !== artifact.id))
+                }
+              />
+            ))
           )}
         </div>
       </Card>

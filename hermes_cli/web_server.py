@@ -10,6 +10,7 @@ Usage:
 """
 
 import asyncio
+import base64
 import hmac
 import importlib.util
 import json
@@ -87,6 +88,8 @@ app = FastAPI(title="Hermes Agent", version=__version__)
 # ---------------------------------------------------------------------------
 _SESSION_TOKEN = secrets.token_urlsafe(32)
 _SESSION_HEADER_NAME = "X-Hermes-Session-Token"
+_HTML_ARTIFACT_MAX_BYTES = 10 * 1024 * 1024
+_HTML_ARTIFACT_TOKEN_TTL_SECONDS = 15 * 60
 
 # In-browser Chat tab (/chat, /api/pty, …).  Off unless ``hermes dashboard --tui``
 # or HERMES_DASHBOARD_TUI=1.  Set from :func:`start_server`.
@@ -277,6 +280,8 @@ async def auth_middleware(request: Request, call_next):
     if getattr(request.app.state, "auth_required", False):
         return await call_next(request)
     path = request.url.path
+    if path == "/api/artifacts/html/view":
+        return await call_next(request)
     if path.startswith("/api/") and path not in _PUBLIC_API_PATHS:
         if not _has_valid_session_token(request):
             return JSONResponse(
@@ -4680,6 +4685,142 @@ async def post_plugin_visibility(request: Request, name: str, body: _PluginVisib
     config["dashboard"]["hidden_plugins"] = hidden_list
     save_config(config)
     return {"ok": True, "name": name, "hidden": body.hidden}
+
+
+class HtmlArtifactResolveRequest(BaseModel):
+    path: str
+
+
+def _path_is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
+def _html_artifact_allowed_roots() -> List[Path]:
+    roots: List[Path] = []
+    candidates = [
+        PROJECT_ROOT,
+        get_hermes_home() / "artifacts",
+        get_hermes_home() / "cache",
+        Path("/Users/yichen/Desktop/OntologyBrain/content_os"),
+    ]
+    for candidate in candidates:
+        try:
+            resolved = candidate.expanduser().resolve()
+        except (OSError, RuntimeError):
+            continue
+        if resolved.exists() and resolved.is_dir() and resolved not in roots:
+            roots.append(resolved)
+    return roots
+
+
+def _resolve_html_artifact_path(raw_path: str) -> Path:
+    raw = (raw_path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Path is required")
+    if raw.startswith(("http://", "https://", "file://")):
+        raise HTTPException(status_code=400, detail="Only local absolute paths are supported")
+
+    candidate = Path(os.path.expanduser(os.path.expandvars(raw)))
+    if not candidate.is_absolute():
+        raise HTTPException(status_code=400, detail="Path must be absolute")
+
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid path: {exc}") from exc
+
+    if not resolved.is_file():
+        raise HTTPException(status_code=400, detail="Path must point to a file")
+    if resolved.suffix.lower() not in {".html", ".htm"}:
+        raise HTTPException(status_code=400, detail="Only .html and .htm files are supported")
+
+    try:
+        size = resolved.stat().st_size
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not stat file: {exc}") from exc
+    if size > _HTML_ARTIFACT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="HTML artifact is too large")
+
+    allowed_roots = _html_artifact_allowed_roots()
+    if not any(_path_is_relative_to(resolved, root) for root in allowed_roots):
+        raise HTTPException(status_code=403, detail="Path is outside allowed artifact roots")
+
+    return resolved
+
+
+def _html_artifact_token(path: Path) -> str:
+    expires = int(time.time() + _HTML_ARTIFACT_TOKEN_TTL_SECONDS)
+    payload = json.dumps({"path": str(path), "exp": expires}, separators=(",", ":"))
+    payload_b64 = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii").rstrip("=")
+    signature = hmac.new(_SESSION_TOKEN.encode("utf-8"), payload_b64.encode("ascii"), "sha256").digest()
+    sig_b64 = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    return f"{payload_b64}.{sig_b64}"
+
+
+def _decode_html_artifact_token(token: str) -> Path:
+    try:
+        payload_b64, sig_b64 = token.split(".", 1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid artifact id")
+
+    expected_sig = hmac.new(_SESSION_TOKEN.encode("utf-8"), payload_b64.encode("ascii"), "sha256").digest()
+    try:
+        actual_sig = base64.urlsafe_b64decode(sig_b64 + "=" * (-len(sig_b64) % 4))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid artifact signature") from exc
+    if not hmac.compare_digest(actual_sig, expected_sig):
+        raise HTTPException(status_code=403, detail="Invalid artifact signature")
+
+    try:
+        payload_raw = base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)).decode("utf-8")
+        payload = json.loads(payload_raw)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid artifact payload") from exc
+
+    if int(payload.get("exp") or 0) < int(time.time()):
+        raise HTTPException(status_code=410, detail="Artifact link expired")
+
+    return _resolve_html_artifact_path(str(payload.get("path") or ""))
+
+
+@app.post("/api/artifacts/html/resolve")
+async def resolve_html_artifact(request: Request, body: HtmlArtifactResolveRequest):
+    _require_token(request)
+    path = _resolve_html_artifact_path(body.path)
+    stat_info = path.stat()
+    artifact_id = _html_artifact_token(path)
+    return {
+        "id": artifact_id,
+        "name": path.name,
+        "path": str(path),
+        "directory": str(path.parent),
+        "size": stat_info.st_size,
+        "modified_at": stat_info.st_mtime,
+        "preview_url": f"/api/artifacts/html/view?id={urllib.parse.quote(artifact_id)}",
+    }
+
+
+@app.get("/api/artifacts/html/view")
+async def view_html_artifact(id: str):
+    # iframe navigation cannot attach the dashboard session header. The
+    # short-lived signed artifact id is therefore the authorization boundary
+    # for this read-only HTML response; resolve still requires the session token.
+    path = _decode_html_artifact_token(id)
+    return FileResponse(
+        path,
+        media_type="text/html; charset=utf-8",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Content-Security-Policy": "sandbox allow-scripts allow-same-origin; default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: blob: file:; style-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @app.get("/dashboard-plugins/{plugin_name}/{file_path:path}")

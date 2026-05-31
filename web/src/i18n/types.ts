@@ -1,6 +1,7 @@
 export type Locale =
   | "en"
   | "zh"
+  | "zh-business"
   | "zh-hant"
   | "ja"
   | "de"
@@ -62,6 +63,16 @@ export interface Translations {
     messaging: string;
     pluginLoadFailed: string;
     pluginNotRegistered: string;
+  };
+
+  // ── Relative time ──
+  time?: {
+    justNow: string;
+    minutesAgo: string;
+    hoursAgo: string;
+    yesterday: string;
+    daysAgo: string;
+    unknown: string;
   };
 
   // ── App shell ──
@@ -207,6 +218,50 @@ export interface Translations {
     toolCalls: string;
     noModelsData: string;
     startSession: string;
+    capabilities?: {
+      tools: string;
+      vision: string;
+      reasoning: string;
+    };
+    assignment?: {
+      useAs: string;
+      mainModel: string;
+      current: string;
+      auxiliaryTask: string;
+      allAuxiliaryTasks: string;
+      missingProviderModel: string;
+      mainBadge: string;
+      auxBadge: string;
+      settingsTitle: string;
+      appliesToNewSessions: string;
+      auxiliaryTasks: string;
+      configure: string;
+      change: string;
+      resetAllToAuto: string;
+      autoUseMainModel: string;
+      providerDefault: string;
+      taskOverrides: string;
+      tasksAllAuto: string;
+      setMainModel: string;
+      setAuxiliaryTask: string;
+      resetAuxiliaryModels: string;
+      resetAuxiliaryModelsDescription: string;
+      resetAll: string;
+      auxiliaryTasksDescription: string;
+    };
+    auxiliaryTasks?: {
+      vision: { label: string; hint: string };
+      web_extract: { label: string; hint: string };
+      compression: { label: string; hint: string };
+      skills_hub: { label: string; hint: string };
+      approval: { label: string; hint: string };
+      mcp: { label: string; hint: string };
+      title_generation: { label: string; hint: string };
+      triage_specifier: { label: string; hint: string };
+      kanban_decomposer: { label: string; hint: string };
+      profile_describer: { label: string; hint: string };
+      curator: { label: string; hint: string };
+    };
   };
 
   // ── Logs page ──
@@ -239,6 +294,19 @@ export interface Translations {
     pause: string;
     resume: string;
     triggerNow: string;
+    profile?: string;
+    allProfiles?: string;
+    defaultProfile?: string;
+    requiredFields?: string;
+    fallbackJobTitle?: string;
+    states?: {
+      enabled: string;
+      scheduled: string;
+      paused: string;
+      error: string;
+      completed: string;
+      disabled: string;
+    };
     delivery: {
       local: string;
       telegram: string;
@@ -393,6 +461,7 @@ export interface Translations {
     hideValue: string;
     keysCount: string;
     llmProviders: string;
+    providerFallback?: string;
     notConfigured: string;
     notSet: string;
     providersConfigured: string;

@@ -39,20 +39,82 @@ const PERIODS = [
   { label: "90d", days: 90 },
 ] as const;
 
-// Must match _AUX_TASK_SLOTS in hermes_cli/web_server.py.
-const AUX_TASKS: readonly { key: string; label: string; hint: string }[] = [
-  { key: "vision", label: "Vision", hint: "Image analysis" },
-  { key: "web_extract", label: "Web Extract", hint: "Page summarization" },
-  { key: "compression", label: "Compression", hint: "Context compaction" },
-  { key: "skills_hub", label: "Skills Hub", hint: "Skill search" },
-  { key: "approval", label: "Approval", hint: "Smart auto-approve" },
-  { key: "mcp", label: "MCP", hint: "MCP tool routing" },
-  { key: "title_generation", label: "Title Gen", hint: "Session titles" },
-  { key: "triage_specifier", label: "Triage Specifier", hint: "Kanban spec fleshing" },
-  { key: "kanban_decomposer", label: "Kanban Decomposer", hint: "Task decomposition" },
-  { key: "profile_describer", label: "Profile Describer", hint: "Auto profile descriptions" },
-  { key: "curator", label: "Curator", hint: "Skill-usage review" },
+type AuxiliaryTaskKey =
+  | "vision"
+  | "web_extract"
+  | "compression"
+  | "skills_hub"
+  | "approval"
+  | "mcp"
+  | "title_generation"
+  | "triage_specifier"
+  | "kanban_decomposer"
+  | "profile_describer"
+  | "curator";
+
+const AUX_TASK_KEYS: readonly AuxiliaryTaskKey[] = [
+  "vision",
+  "web_extract",
+  "compression",
+  "skills_hub",
+  "approval",
+  "mcp",
+  "title_generation",
+  "triage_specifier",
+  "kanban_decomposer",
+  "profile_describer",
+  "curator",
 ] as const;
+
+const AUX_TASK_FALLBACKS: Record<AuxiliaryTaskKey, { label: string; hint: string }> = {
+  vision: { label: "Vision", hint: "Image analysis" },
+  web_extract: { label: "Web Extract", hint: "Page summarization" },
+  compression: { label: "Compression", hint: "Context compaction" },
+  skills_hub: { label: "Skills Hub", hint: "Skill search" },
+  approval: { label: "Approval", hint: "Smart auto-approve" },
+  mcp: { label: "MCP", hint: "MCP tool routing" },
+  title_generation: { label: "Title Gen", hint: "Session titles" },
+  triage_specifier: { label: "Triage Specifier", hint: "Kanban spec fleshing" },
+  kanban_decomposer: { label: "Kanban Decomposer", hint: "Task decomposition" },
+  profile_describer: { label: "Profile Describer", hint: "Auto profile descriptions" },
+  curator: { label: "Curator", hint: "Skill-usage review" },
+};
+
+function getAuxTaskMeta(t: ReturnType<typeof useI18n>["t"], key: AuxiliaryTaskKey) {
+  return t.models.auxiliaryTasks?.[key] ?? AUX_TASK_FALLBACKS[key];
+}
+
+function getModelAssignmentCopy(t: ReturnType<typeof useI18n>["t"]) {
+  return {
+    useAs: "Use as",
+    mainModel: "Main model",
+    current: "current",
+    auxiliaryTask: "Auxiliary task",
+    allAuxiliaryTasks: "All auxiliary tasks",
+    missingProviderModel: "Missing provider/model",
+    mainBadge: "main",
+    auxBadge: "aux",
+    settingsTitle: "Model Settings",
+    appliesToNewSessions: "applies to new sessions",
+    auxiliaryTasks: "Auxiliary tasks",
+    configure: "Configure",
+    change: "Change",
+    resetAllToAuto: "Reset all to auto",
+    autoUseMainModel: "auto (use main model)",
+    providerDefault: "(provider default)",
+    taskOverrides: "{count} override{s} · {auto} auto",
+    tasksAllAuto: "{count} tasks · all auto",
+    setMainModel: "Set Main Model",
+    setAuxiliaryTask: "Set Auxiliary: {task}",
+    resetAuxiliaryModels: "Reset auxiliary models",
+    resetAuxiliaryModelsDescription:
+      "Reset every auxiliary task to 'auto'? This overrides any per-task overrides you've set.",
+    resetAll: "Reset all",
+    auxiliaryTasksDescription:
+      "Auxiliary tasks handle side-jobs like vision, session search, and compression. auto means \"use the main model\". Override per-task when you want a cheap/fast model for a specific job.",
+    ...t.models.assignment,
+  };
+}
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -86,20 +148,22 @@ function TokenBar({
   output,
   cacheRead,
   reasoning,
+  labels,
 }: {
   input: number;
   output: number;
   cacheRead: number;
   reasoning: number;
+  labels: { cacheRead: string; reasoning: string; input: string; output: string };
 }) {
   const total = input + output + cacheRead + reasoning;
   if (total === 0) return null;
 
   const segments = [
-    { value: cacheRead, color: "bg-blue-400/60", dotColor: "bg-blue-400", label: "Cache Read" },
-    { value: reasoning, color: "bg-purple-400/60", dotColor: "bg-purple-400", label: "Reasoning" },
-    { value: input, color: "bg-[#ffe6cb]/70", dotColor: "bg-[#ffe6cb]", label: "Input" },
-    { value: output, color: "bg-emerald-500/70", dotColor: "bg-emerald-500", label: "Output" },
+    { value: cacheRead, color: "bg-blue-400/60", dotColor: "bg-blue-400", label: labels.cacheRead },
+    { value: reasoning, color: "bg-purple-400/60", dotColor: "bg-purple-400", label: labels.reasoning },
+    { value: input, color: "bg-[#ffe6cb]/70", dotColor: "bg-[#ffe6cb]", label: labels.input },
+    { value: output, color: "bg-emerald-500/70", dotColor: "bg-emerald-500", label: labels.output },
   ].filter((s) => s.value > 0);
 
   return (
@@ -139,8 +203,10 @@ function TokenBar({
 
 function CapabilityBadges({
   capabilities,
+  labels,
 }: {
   capabilities: ModelsAnalyticsModelEntry["capabilities"];
+  labels: { tools: string; vision: string; reasoning: string };
 }) {
   const hasAny =
     capabilities.supports_tools ||
@@ -153,17 +219,17 @@ function CapabilityBadges({
     <div className="flex flex-wrap items-center gap-1.5">
       {capabilities.supports_tools && (
         <span className="inline-flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-          <Wrench className="h-2.5 w-2.5" /> Tools
+          <Wrench className="h-2.5 w-2.5" /> {labels.tools}
         </span>
       )}
       {capabilities.supports_vision && (
         <span className="inline-flex items-center gap-1 bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
-          <Eye className="h-2.5 w-2.5" /> Vision
+          <Eye className="h-2.5 w-2.5" /> {labels.vision}
         </span>
       )}
       {capabilities.supports_reasoning && (
         <span className="inline-flex items-center gap-1 bg-purple-500/10 px-1.5 py-0.5 text-xs font-medium text-purple-600 dark:text-purple-400">
-          <Brain className="h-2.5 w-2.5" /> Reasoning
+          <Brain className="h-2.5 w-2.5" /> {labels.reasoning}
         </span>
       )}
       {capabilities.model_family && (
@@ -197,13 +263,15 @@ function UseAsMenu({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useI18n();
+  const copy = getModelAssignmentCopy(t);
 
   const assign = async (
     scope: "main" | "auxiliary",
     task: string,
   ) => {
     if (!provider || !model) {
-      setError("Missing provider/model");
+      setError(copy.missingProviderModel);
       return;
     }
     setBusy(true);
@@ -240,7 +308,7 @@ function UseAsMenu({
         className="h-6 px-2 text-xs uppercase"
         prefix={busy ? <Spinner /> : null}
       >
-        Use as <ChevronDown className="h-3 w-3" />
+        {copy.useAs} <ChevronDown className="h-3 w-3" />
       </Button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50 min-w-[220px] border border-border bg-card shadow-lg">
@@ -252,17 +320,17 @@ function UseAsMenu({
           >
             <span className="flex items-center gap-2">
               <Star className="h-3 w-3" />
-              Main model
+              {copy.mainModel}
             </span>
             {isMain && (
               <span className="text-display text-xs tracking-wider text-primary">
-                current
+                {copy.current}
               </span>
             )}
           </button>
 
           <div className="border-t border-border/50 px-3 py-1.5 text-display text-xs tracking-wider text-text-tertiary">
-            Auxiliary task
+            {copy.auxiliaryTask}
           </div>
 
           <button
@@ -271,25 +339,28 @@ function UseAsMenu({
             disabled={busy}
             className="flex w-full items-center justify-between px-3 py-1.5 text-xs uppercase hover:bg-muted/50 disabled:opacity-40"
           >
-            <span>All auxiliary tasks</span>
+            <span>{copy.allAuxiliaryTasks}</span>
           </button>
 
-          {AUX_TASKS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => assign("auxiliary", t.key)}
-              disabled={busy}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-xs uppercase hover:bg-muted/50 disabled:opacity-40"
-            >
-              <span>{t.label}</span>
-              {mainAuxTask === t.key && (
-                <span className="text-display text-xs tracking-wider text-primary">
-                  current
-                </span>
-              )}
-            </button>
-          ))}
+          {AUX_TASK_KEYS.map((key) => {
+            const meta = getAuxTaskMeta(t, key);
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => assign("auxiliary", key)}
+                disabled={busy}
+                className="flex w-full items-center justify-between px-3 py-1.5 text-xs uppercase hover:bg-muted/50 disabled:opacity-40"
+              >
+                <span>{meta.label}</span>
+                {mainAuxTask === key && (
+                  <span className="text-display text-xs tracking-wider text-primary">
+                    {copy.current}
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
           {error && (
             <div className="px-3 py-2 text-xs text-destructive border-t border-border/50">
@@ -322,6 +393,12 @@ function ModelCard({
   showTokens: boolean;
 }) {
   const { t } = useI18n();
+  const copy = getModelAssignmentCopy(t);
+  const capabilityLabels = {
+    tools: t.models.capabilities?.tools ?? "Tools",
+    vision: t.models.capabilities?.vision ?? "Vision",
+    reasoning: t.models.capabilities?.reasoning ?? "Reasoning",
+  };
   const provider = entry.provider || modelVendor(entry.model);
   const totalTokens = entry.input_tokens + entry.output_tokens;
   const caps = entry.capabilities;
@@ -353,12 +430,12 @@ function ModelCard({
               </CardTitle>
               {isMain && (
                 <span className="inline-flex items-center gap-0.5 bg-primary/15 px-1.5 py-0.5 text-display text-xs font-medium tracking-wider text-primary">
-                  <Star className="h-2.5 w-2.5" /> main
+                  <Star className="h-2.5 w-2.5" /> {copy.mainBadge}
                 </span>
               )}
               {mainAuxTask && (
                 <span className="inline-flex items-center bg-purple-500/10 px-1.5 py-0.5 text-display text-xs font-medium tracking-wider text-purple-600 dark:text-purple-400">
-                  aux · {mainAuxTask}
+                  {copy.auxBadge} · {mainAuxTask}
                 </span>
               )}
             </div>
@@ -420,6 +497,12 @@ function ModelCard({
               output={entry.output_tokens}
               cacheRead={entry.cache_read_tokens}
               reasoning={entry.reasoning_tokens}
+              labels={{
+                cacheRead: "Cache Read",
+                reasoning: capabilityLabels.reasoning,
+                input: t.analytics.input,
+                output: t.analytics.output,
+              }}
             />
 
             <div className="grid grid-cols-3 gap-2 text-xs">
@@ -469,7 +552,7 @@ function ModelCard({
           )}
         </div>
 
-        <CapabilityBadges capabilities={entry.capabilities} />
+        <CapabilityBadges capabilities={entry.capabilities} labels={capabilityLabels} />
       </CardContent>
     </Card>
   );
@@ -498,6 +581,8 @@ function AuxiliaryTasksModal({
   const [resetBusy, setResetBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const modalRef = useModalBehavior({ open: true, onClose });
+  const { t } = useI18n();
+  const copy = getModelAssignmentCopy(t);
 
   const resetAllAux = async () => {
     setConfirmReset(false);
@@ -541,7 +626,7 @@ function AuxiliaryTasksModal({
               id="aux-modal-title"
               className="font-mondwest text-display text-base tracking-wider"
             >
-              Auxiliary Tasks
+              {copy.auxiliaryTasks}
             </h2>
             <Button
               size="sm"
@@ -551,47 +636,45 @@ function AuxiliaryTasksModal({
               className="h-6 text-xs uppercase"
               prefix={resetBusy ? <Spinner /> : null}
             >
-              Reset all to auto
+              {copy.resetAllToAuto}
             </Button>
           </div>
           <p className="text-xs text-text-secondary mt-2">
-            Auxiliary tasks handle side-jobs like vision, session search, and
-            compression. <span className="font-mono">auto</span> means
-            &quot;use the main model&quot;. Override per-task when you want a
-            cheap/fast model for a specific job.
+            {copy.auxiliaryTasksDescription}
           </p>
         </header>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-1">
-          {AUX_TASKS.map((t) => {
-            const cur = aux?.tasks.find((a) => a.task === t.key);
+          {AUX_TASK_KEYS.map((key) => {
+            const meta = getAuxTaskMeta(t, key);
+            const cur = aux?.tasks.find((a) => a.task === key);
             const isAuto =
               !cur || cur.provider === "auto" || !cur.provider;
             return (
               <div
-                key={t.key}
+                key={key}
                 className="flex items-center justify-between gap-3 px-3 py-2 border border-border/30 bg-card/50 hover:bg-muted/20 transition-colors"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-medium">{t.label}</span>
+                    <span className="text-xs font-medium">{meta.label}</span>
                     <span className="text-xs text-text-tertiary">
-                      {t.hint}
+                      {meta.hint}
                     </span>
                   </div>
                   <div className="text-xs font-mono text-text-secondary truncate">
                     {isAuto
-                      ? "auto (use main model)"
-                      : `${cur?.provider} · ${cur?.model || "(provider default)"}`}
+                      ? copy.autoUseMainModel
+                      : `${cur?.provider} · ${cur?.model || copy.providerDefault}`}
                   </div>
                 </div>
                 <Button
                   size="sm"
                   outlined
-                  onClick={() => setPicker({ kind: "aux", task: t.key })}
+                  onClick={() => setPicker({ kind: "aux", task: key })}
                   className="h-6 text-xs uppercase"
                 >
-                  Change
+                  {copy.change}
                 </Button>
               </div>
             );
@@ -603,10 +686,12 @@ function AuxiliaryTasksModal({
             key={`picker-${refreshKey}`}
             loader={api.getModelOptions}
             alwaysGlobal
-            title={`Set Auxiliary: ${
-              AUX_TASKS.find((t) => t.key === picker.task)?.label ??
-              picker.task
-            }`}
+            title={copy.setAuxiliaryTask.replace(
+              "{task}",
+              AUX_TASK_KEYS.includes(picker.task as AuxiliaryTaskKey)
+                ? getAuxTaskMeta(t, picker.task as AuxiliaryTaskKey).label
+                : picker.task,
+            )}
             onApply={async ({ provider, model }) => {
               await api.setModelAssignment({
                 scope: "auxiliary",
@@ -623,10 +708,10 @@ function AuxiliaryTasksModal({
           open={confirmReset}
           onCancel={() => setConfirmReset(false)}
           onConfirm={() => void resetAllAux()}
-          title="Reset auxiliary models"
-          description="Reset every auxiliary task to 'auto'? This overrides any per-task overrides you've set."
+          title={copy.resetAuxiliaryModels}
+          description={copy.resetAuxiliaryModelsDescription}
           destructive
-          confirmLabel="Reset all"
+          confirmLabel={copy.resetAll}
           loading={resetBusy}
         />
       </div>
@@ -645,6 +730,8 @@ function ModelSettingsPanel({
 }) {
   const [auxModalOpen, setAuxModalOpen] = useState(false);
   const [picker, setPicker] = useState<PickerTarget | null>(null);
+  const { t } = useI18n();
+  const copy = getModelAssignmentCopy(t);
 
   const mainProv = aux?.main.provider ?? "";
   const mainModel = aux?.main.model ?? "";
@@ -674,9 +761,9 @@ function ModelSettingsPanel({
       <CardHeader className="min-w-0 pb-3">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Settings2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <CardTitle className="text-sm">Model Settings</CardTitle>
+          <CardTitle className="text-sm">{copy.settingsTitle}</CardTitle>
           <span className="max-w-full min-w-0 text-xs text-text-secondary [overflow-wrap:anywhere]">
-            applies to new sessions
+            {copy.appliesToNewSessions}
           </span>
         </div>
       </CardHeader>
@@ -688,7 +775,7 @@ function ModelSettingsPanel({
             <div className="flex items-center gap-2 mb-0.5">
               <Star className="h-3 w-3 text-primary" />
               <span className="text-display text-xs font-medium tracking-wider">
-                Main model
+                {copy.mainModel}
               </span>
             </div>
             <div className="text-xs font-mono text-text-secondary truncate">
@@ -702,7 +789,7 @@ function ModelSettingsPanel({
             onClick={() => setPicker({ kind: "main" })}
             className="shrink-0 self-start text-xs uppercase sm:self-center"
           >
-            Change
+            {copy.change}
           </Button>
         </div>
 
@@ -712,13 +799,16 @@ function ModelSettingsPanel({
             <div className="flex items-center gap-2 mb-0.5">
               <Cpu className="h-3 w-3 text-text-tertiary" />
               <span className="text-display text-xs font-medium tracking-wider">
-                Auxiliary tasks
+                {copy.auxiliaryTasks}
               </span>
             </div>
             <div className="text-xs font-mono text-text-secondary truncate">
               {auxOverrideCount > 0
-                ? `${auxOverrideCount} override${auxOverrideCount > 1 ? "s" : ""} · ${AUX_TASKS.length - auxOverrideCount} auto`
-                : `${AUX_TASKS.length} tasks · all auto`}
+                ? copy.taskOverrides
+                    .replace("{count}", String(auxOverrideCount))
+                    .replace("{s}", auxOverrideCount > 1 ? "s" : "")
+                    .replace("{auto}", String(AUX_TASK_KEYS.length - auxOverrideCount))
+                : copy.tasksAllAuto.replace("{count}", String(AUX_TASK_KEYS.length))}
             </div>
           </div>
           <Button
@@ -727,7 +817,7 @@ function ModelSettingsPanel({
             onClick={() => setAuxModalOpen(true)}
             className="shrink-0 self-start text-xs uppercase sm:self-center"
           >
-            Configure
+            {copy.configure}
           </Button>
         </div>
 
@@ -736,7 +826,7 @@ function ModelSettingsPanel({
             key={`picker-${refreshKey}`}
             loader={api.getModelOptions}
             alwaysGlobal
-            title="Set Main Model"
+            title={copy.setMainModel}
             onApply={async ({ provider, model }) => {
               await applyAssignment({
                 scope: "main",

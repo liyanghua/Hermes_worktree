@@ -495,6 +495,15 @@ export const api = {
       },
     ),
 
+  // HTML artifacts
+  resolveHtmlArtifact: (path: string) =>
+    fetchJSON<HtmlArtifactInfo>("/api/artifacts/html/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    }),
+  getHtmlArtifactViewUrl: (previewUrl: string) => `${BASE}${previewUrl}`,
+
   // Dashboard themes
   getThemes: () =>
     fetchJSON<DashboardThemesResponse>("/api/dashboard/themes"),
@@ -521,6 +530,16 @@ export interface AuthMeResponse {
   org_id: string;
   provider: string;
   expires_at: number;
+}
+
+export interface HtmlArtifactInfo {
+  id: string;
+  name: string;
+  path: string;
+  directory: string;
+  size: number;
+  modified_at: number;
+  preview_url: string;
 }
 
 export interface ActionResponse {

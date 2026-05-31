@@ -66,11 +66,11 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
   { prefix: "XIAOMI_", name: "Xiaomi MiMo", priority: 13 },
 ];
 
-function getProviderGroup(key: string): string {
+function getProviderGroup(key: string, providerFallback: string): string {
   for (const g of PROVIDER_GROUPS) {
     if (key.startsWith(g.prefix)) return g.name;
   }
-  return "Other";
+  return providerFallback;
 }
 
 function getProviderPriority(groupName: string): number {
@@ -258,7 +258,7 @@ function EnvVarRow({
               size="icon"
               onClick={() => onReveal(varKey)}
               title={isRevealed ? t.env.hideValue : t.env.showValue}
-              aria-label={isRevealed ? `Hide ${varKey}` : `Reveal ${varKey}`}
+              aria-label={isRevealed ? `${t.env.hideValue}: ${varKey}` : `${t.env.showValue}: ${varKey}`}
             >
               {isRevealed ? <EyeOff /> : <Eye />}
             </Button>
@@ -393,7 +393,7 @@ function ProviderGroupCard({
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           )}
           <span className="font-semibold text-sm tracking-wide">
-            {group.name === "Other" ? t.common.other : group.name}
+            {group.name === "Other" ? (t.env.providerFallback ?? t.common.other) : group.name}
           </span>
           {hasAnyConfigured && (
             <Badge tone="success" className="text-xs">
@@ -506,15 +506,15 @@ export default function EnvPage() {
   // Scroll-to sub-nav in the page header
   const sections = useMemo(() => {
     const items: { id: string; label: string }[] = [
-      { id: "section-oauth", label: "OAuth" },
-      { id: "section-providers", label: "Providers" },
+      { id: "section-oauth", label: t.oauth.title },
+      { id: "section-providers", label: t.env.llmProviders },
     ];
     if (vars) {
       const categories = ["tool", "messaging", "setting"];
       const CATEGORY_LABELS: Record<string, string> = {
-        tool: "Tools",
-        messaging: "Messaging",
-        setting: "Settings",
+        tool: t.app.nav.skills,
+        messaging: t.common.messaging,
+        setting: t.app.nav.config,
       };
       for (const cat of categories) {
         const hasEntries = Object.values(vars).some(
@@ -526,7 +526,7 @@ export default function EnvPage() {
       }
     }
     return items;
-  }, [vars]);
+  }, [vars, t.app.nav.config, t.app.nav.skills, t.common.messaging, t.env.llmProviders, t.oauth.title]);
 
   useLayoutEffect(() => {
     if (!vars) {
@@ -667,7 +667,7 @@ export default function EnvPage() {
     // Group by provider
     const groupMap = new Map<string, [string, EnvVarInfo][]>();
     for (const entry of providerEntries) {
-      const groupName = getProviderGroup(entry[0]);
+      const groupName = getProviderGroup(entry[0], t.env.providerFallback ?? t.common.other);
       if (!groupMap.has(groupName)) groupMap.set(groupName, []);
       groupMap.get(groupName)!.push(entry);
     }

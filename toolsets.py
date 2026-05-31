@@ -70,6 +70,19 @@ _HERMES_CORE_TOOLS = [
     "kanban_unblock",
     # Computer use (macOS, gated on cua-driver being installed via check_fn)
     "computer_use",
+    # Feishu/Lark knowledge base access via official lark-cli (read-only)
+    "lark_auth_status", "lark_drive_search", "lark_doc_fetch",
+    "lark_wiki_get_node", "lark_wiki_list_spaces",
+    # DingTalk Workspace docs, drive, wiki, group chat, and task-card workflow via dws CLI
+    "dingtalk_auth_status", "dingtalk_doc_search", "dingtalk_doc_read",
+    "dingtalk_doc_info", "dingtalk_wiki_space_search",
+    "dingtalk_wiki_space_list", "dingtalk_wiki_space_get",
+    "dingtalk_drive_space_list", "dingtalk_drive_file_list",
+    "dingtalk_drive_file_info", "dingtalk_chat_search_groups",
+    "dingtalk_chat_list_group_messages", "dingtalk_chat_list_messages_by_time_range",
+    "dingtalk_contact_user_search", "dingtalk_task_card_save_preview",
+    "dingtalk_task_card_list_previews", "dingtalk_task_card_get_preview",
+    "dingtalk_task_card_update_preview", "dingtalk_task_card_create_todo",
 ]
 
 # Webhook events may originate from untrusted third-party content (for example,
@@ -309,6 +322,31 @@ TOOLSETS = {
         "tools": [
             "feishu_drive_list_comments", "feishu_drive_list_comment_replies",
             "feishu_drive_reply_comment", "feishu_drive_add_comment",
+        ],
+        "includes": []
+    },
+
+    "lark_cli": {
+        "description": "Read-only Feishu/Lark Drive, Docs, and Wiki access through the official lark-cli",
+        "tools": [
+            "lark_auth_status", "lark_drive_search", "lark_doc_fetch",
+            "lark_wiki_get_node", "lark_wiki_list_spaces",
+        ],
+        "includes": []
+    },
+
+    "dingtalk_workspace": {
+        "description": "DingTalk Workspace docs, drive, wiki, group chat, local task-card previews, and confirmed todo creation through the official dws CLI",
+        "tools": [
+            "dingtalk_auth_status", "dingtalk_doc_search", "dingtalk_doc_read",
+            "dingtalk_doc_info", "dingtalk_wiki_space_search",
+            "dingtalk_wiki_space_list", "dingtalk_wiki_space_get",
+            "dingtalk_drive_space_list", "dingtalk_drive_file_list",
+            "dingtalk_drive_file_info", "dingtalk_chat_search_groups",
+            "dingtalk_chat_list_group_messages", "dingtalk_chat_list_messages_by_time_range",
+            "dingtalk_contact_user_search", "dingtalk_task_card_save_preview",
+            "dingtalk_task_card_list_previews", "dingtalk_task_card_get_preview",
+            "dingtalk_task_card_update_preview", "dingtalk_task_card_create_todo",
         ],
         "includes": []
     },

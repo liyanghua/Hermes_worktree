@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import type { Locale, Translations } from "./types";
 import { en } from "./en";
 import { zh } from "./zh";
+import { zhBusiness } from "./zh-business";
 import { zhHant } from "./zh-hant";
 import { ja } from "./ja";
 import { de } from "./de";
@@ -20,6 +21,7 @@ import { hu } from "./hu";
 const TRANSLATIONS: Record<Locale, Translations> = {
   en,
   zh,
+  "zh-business": zhBusiness,
   "zh-hant": zhHant,
   ja,
   de,
@@ -48,6 +50,7 @@ const TRANSLATIONS: Record<Locale, Translations> = {
 export const LOCALE_META: Record<Locale, { name: string }> = {
   en: { name: "English" },
   zh: { name: "简体中文" },
+  "zh-business": { name: "业务中文" },
   "zh-hant": { name: "繁體中文" },
   ja: { name: "日本語" },
   de: { name: "Deutsch" },
@@ -66,6 +69,7 @@ export const LOCALE_META: Record<Locale, { name: string }> = {
 
 const SUPPORTED_LOCALES = Object.keys(TRANSLATIONS) as Locale[];
 const STORAGE_KEY = "hermes-locale";
+const DEFAULT_LOCALE: Locale = "zh-business";
 
 function isLocale(value: string): value is Locale {
   return (SUPPORTED_LOCALES as string[]).includes(value);
@@ -78,7 +82,7 @@ function getInitialLocale(): Locale {
   } catch {
     // SSR or privacy mode
   }
-  return "en";
+  return DEFAULT_LOCALE;
 }
 
 interface I18nContextValue {
@@ -88,9 +92,9 @@ interface I18nContextValue {
 }
 
 const I18nContext = createContext<I18nContextValue>({
-  locale: "en",
+  locale: DEFAULT_LOCALE,
   setLocale: () => {},
-  t: en,
+  t: zhBusiness,
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
