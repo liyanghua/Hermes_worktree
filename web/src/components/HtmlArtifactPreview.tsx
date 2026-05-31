@@ -1,5 +1,5 @@
 import { Button } from "@nous-research/ui/ui/components/button";
-import { Card } from "@/components/ui/card";
+import { Card } from "@nous-research/ui/ui/components/card";
 import { api, type HtmlArtifactInfo } from "@/lib/api";
 import { Copy, ExternalLink, FileCode2, RefreshCw, X } from "lucide-react";
 import { useMemo, useState } from "react";
